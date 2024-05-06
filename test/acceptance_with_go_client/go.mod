@@ -4,9 +4,6 @@ go 1.21
 
 replace github.com/weaviate/weaviate => ../..
 
-// we pin github.com/tailor-inc/graphql => github.com/tailor-inc/graphql v0.2.1 because we encountered some issue with later versions
-replace github.com/tailor-inc/graphql => github.com/tailor-inc/graphql v0.2.1
-
 require (
 	github.com/go-openapi/strfmt v0.21.7
 	github.com/google/uuid v1.6.0
