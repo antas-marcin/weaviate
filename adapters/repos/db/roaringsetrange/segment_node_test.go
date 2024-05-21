@@ -19,10 +19,10 @@ import (
 	"github.com/weaviate/weaviate/adapters/repos/db/roaringset"
 )
 
-func TestSegmentNode_HappyPath(t *testing.T) {
+func TestSegmentNode_WithDeletions(t *testing.T) {
 	additions := roaringset.NewBitmap(1, 2, 3, 4, 6)
 	deletions := roaringset.NewBitmap(5, 7)
-	key := uint8(123)
+	key := uint8(0)
 
 	sn, err := NewSegmentNode(key, additions, deletions)
 	require.Nil(t, err)
@@ -39,12 +39,57 @@ func TestSegmentNode_HappyPath(t *testing.T) {
 	newDeletions := snBuf.Deletions()
 	assert.False(t, newDeletions.Contains(4))
 	assert.True(t, newDeletions.Contains(5))
+	assert.Equal(t, uint8(0), snBuf.Key())
+}
+
+func TestSegmentNode_WithoutDeletions(t *testing.T) {
+	additions := roaringset.NewBitmap(1, 2, 3, 4, 6)
+	deletions := roaringset.NewBitmap(5, 7) // ignored
+	key := uint8(123)
+
+	sn, err := NewSegmentNode(key, additions, deletions)
+	require.Nil(t, err)
+
+	buf := sn.ToBuffer()
+	assert.Equal(t, sn.Len(), uint64(len(buf)))
+
+	snBuf := NewSegmentNodeFromBuffer(buf)
+	assert.Equal(t, snBuf.Len(), uint64(len(buf)))
+
+	newAdditions := snBuf.Additions()
+	assert.True(t, newAdditions.Contains(4))
+	assert.False(t, newAdditions.Contains(5))
+	newDeletions := snBuf.Deletions()
+	assert.True(t, newDeletions.IsEmpty())
 	assert.Equal(t, uint8(123), snBuf.Key())
 }
 
-func TestSegmentNode_InitializingFromBufferTooLarge(t *testing.T) {
+func TestSegmentNode_WithDeletions_InitializingFromBufferTooLarge(t *testing.T) {
 	additions := roaringset.NewBitmap(1, 2, 3, 4, 6)
 	deletions := roaringset.NewBitmap(5, 7)
+	key := uint8(0)
+
+	sn, err := NewSegmentNode(key, additions, deletions)
+	require.Nil(t, err)
+
+	buf := sn.ToBuffer()
+	assert.Equal(t, sn.Len(), uint64(len(buf)))
+
+	bufTooLarge := make([]byte, 3*len(buf))
+	copy(bufTooLarge, buf)
+
+	snBuf := NewSegmentNodeFromBuffer(bufTooLarge)
+	// assert that the buffer self reports the useful length, not the length of
+	// the initialization buffer
+	assert.Equal(t, snBuf.Len(), uint64(len(buf)))
+	// assert that ToBuffer() returns a buffer that is no longer than the useful
+	// length
+	assert.Equal(t, len(buf), len(snBuf.ToBuffer()))
+}
+
+func TestSegmentNode_WithoutDeletions_InitializingFromBufferTooLarge(t *testing.T) {
+	additions := roaringset.NewBitmap(1, 2, 3, 4, 6)
+	deletions := roaringset.NewBitmap(5, 7) // ignored
 	key := uint8(123)
 
 	sn, err := NewSegmentNode(key, additions, deletions)

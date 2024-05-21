@@ -44,6 +44,7 @@ import (
 //	17:(17+x)           | additions bitmap
 //	(17+x):(25+x)       | uint64 length indicator for deletions sroar bitmap (y)
 //	(25+x):(25+x+y)     | deletions bitmap
+//						| deletion indicator and bitmaps are used only for key == 0
 type SegmentNode struct {
 	data []byte
 }
@@ -69,7 +70,10 @@ func (sn *SegmentNode) Additions() *sroar.Bitmap {
 // maintenance lock or can otherwise be sure that no compaction can occur.
 func (sn *SegmentNode) Deletions() *sroar.Bitmap {
 	rw := byteops.NewReadWriter(sn.data)
-	rw.MoveBufferToAbsolutePosition(9)
+	rw.MoveBufferToAbsolutePosition(8)
+	if key := rw.ReadUint8(); key != 0 {
+		return sroar.NewBitmap()
+	}
 	rw.DiscardBytesFromBufferWithUint64LengthIndicator()
 	return sroar.FromBuffer(rw.ReadBytesFromBufferWithUint64LengthIndicator())
 }
@@ -84,10 +88,15 @@ func NewSegmentNode(
 	key uint8, additions, deletions *sroar.Bitmap,
 ) (*SegmentNode, error) {
 	additionsBuf := additions.ToBuffer()
-	deletionsBuf := deletions.ToBuffer()
+	var deletionsBuf []byte
 
-	// total len + key + 2x length indicators + 2x payload
-	expectedSize := 8 + 1 + 8 + len(additionsBuf) + 8 + len(deletionsBuf)
+	// total len + key + length indicators + payload
+	expectedSize := 8 + 1 + 8 + len(additionsBuf)
+
+	if key == 0 {
+		deletionsBuf = deletions.ToBuffer()
+		expectedSize += 8 + len(deletionsBuf)
+	}
 
 	sn := SegmentNode{data: make([]byte, expectedSize)}
 
@@ -100,8 +109,10 @@ func NewSegmentNode(
 		return nil, err
 	}
 
-	if err := rw.CopyBytesToBufferWithUint64LengthIndicator(deletionsBuf); err != nil {
-		return nil, err
+	if key == 0 {
+		if err := rw.CopyBytesToBufferWithUint64LengthIndicator(deletionsBuf); err != nil {
+			return nil, err
+		}
 	}
 
 	offset := rw.Position
