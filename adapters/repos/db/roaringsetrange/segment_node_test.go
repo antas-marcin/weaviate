@@ -110,3 +110,24 @@ func TestSegmentNode_WithoutDeletions_InitializingFromBufferTooLarge(t *testing.
 	assert.ElementsMatch(t, additions, snBuf.Additions().ToArray())
 	assert.True(t, snBuf.Deletions().IsEmpty())
 }
+
+func TestSegmentNode_DeletionsNotStoredForNon0Key(t *testing.T) {
+	key1 := uint8(0)
+	key2 := uint8(15)
+	key3 := uint8(63)
+	additions := roaringset.NewBitmap(1, 2, 3, 4, 6)
+	deletions := roaringset.NewBitmap(5, 7)
+
+	sn1, err := NewSegmentNode(key1, additions, deletions)
+	require.Nil(t, err)
+	sn2, err := NewSegmentNode(key2, additions, deletions)
+	require.Nil(t, err)
+	sn3, err := NewSegmentNode(key3, additions, deletions)
+	require.Nil(t, err)
+
+	assert.Greater(t, sn1.Len(), sn2.Len())
+	assert.Equal(t, sn2.Len(), sn3.Len())
+	assert.False(t, sn1.Deletions().IsEmpty())
+	assert.True(t, sn2.Deletions().IsEmpty())
+	assert.True(t, sn3.Deletions().IsEmpty())
+}
