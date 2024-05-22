@@ -20,58 +20,52 @@ import (
 )
 
 func TestSegmentNode_WithDeletions(t *testing.T) {
-	additions := roaringset.NewBitmap(1, 2, 3, 4, 6)
-	deletions := roaringset.NewBitmap(5, 7)
 	key := uint8(0)
+	additions := []uint64{1, 2, 3, 4, 6}
+	deletions := []uint64{5, 7}
 
-	sn, err := NewSegmentNode(key, additions, deletions)
+	sn, err := NewSegmentNode(key, roaringset.NewBitmap(additions...), roaringset.NewBitmap(deletions...))
 	require.Nil(t, err)
-
 	buf := sn.ToBuffer()
 	assert.Equal(t, sn.Len(), uint64(len(buf)))
+	assert.Equal(t, key, sn.Key())
+	assert.ElementsMatch(t, additions, sn.Additions().ToArray())
+	assert.ElementsMatch(t, deletions, sn.Deletions().ToArray())
 
 	snBuf := NewSegmentNodeFromBuffer(buf)
 	assert.Equal(t, snBuf.Len(), uint64(len(buf)))
-
-	newAdditions := snBuf.Additions()
-	assert.True(t, newAdditions.Contains(4))
-	assert.False(t, newAdditions.Contains(5))
-	newDeletions := snBuf.Deletions()
-	assert.False(t, newDeletions.Contains(4))
-	assert.True(t, newDeletions.Contains(5))
-	assert.Equal(t, uint8(0), snBuf.Key())
+	assert.Equal(t, key, snBuf.Key())
+	assert.ElementsMatch(t, additions, snBuf.Additions().ToArray())
+	assert.ElementsMatch(t, deletions, snBuf.Deletions().ToArray())
 }
 
 func TestSegmentNode_WithoutDeletions(t *testing.T) {
-	additions := roaringset.NewBitmap(1, 2, 3, 4, 6)
-	deletions := roaringset.NewBitmap(5, 7) // ignored
-	key := uint8(123)
+	key := uint8(63)
+	additions := []uint64{1, 2, 3, 4, 6}
+	deletions := []uint64{5, 7} // ignored
 
-	sn, err := NewSegmentNode(key, additions, deletions)
+	sn, err := NewSegmentNode(key, roaringset.NewBitmap(additions...), roaringset.NewBitmap(deletions...))
 	require.Nil(t, err)
-
 	buf := sn.ToBuffer()
 	assert.Equal(t, sn.Len(), uint64(len(buf)))
+	assert.Equal(t, key, sn.Key())
+	assert.ElementsMatch(t, additions, sn.Additions().ToArray())
+	assert.True(t, sn.Deletions().IsEmpty())
 
 	snBuf := NewSegmentNodeFromBuffer(buf)
 	assert.Equal(t, snBuf.Len(), uint64(len(buf)))
-
-	newAdditions := snBuf.Additions()
-	assert.True(t, newAdditions.Contains(4))
-	assert.False(t, newAdditions.Contains(5))
-	newDeletions := snBuf.Deletions()
-	assert.True(t, newDeletions.IsEmpty())
-	assert.Equal(t, uint8(123), snBuf.Key())
+	assert.Equal(t, key, snBuf.Key())
+	assert.ElementsMatch(t, additions, snBuf.Additions().ToArray())
+	assert.True(t, snBuf.Deletions().IsEmpty())
 }
 
 func TestSegmentNode_WithDeletions_InitializingFromBufferTooLarge(t *testing.T) {
-	additions := roaringset.NewBitmap(1, 2, 3, 4, 6)
-	deletions := roaringset.NewBitmap(5, 7)
 	key := uint8(0)
+	additions := []uint64{1, 2, 3, 4, 6}
+	deletions := []uint64{5, 7}
 
-	sn, err := NewSegmentNode(key, additions, deletions)
+	sn, err := NewSegmentNode(key, roaringset.NewBitmap(additions...), roaringset.NewBitmap(deletions...))
 	require.Nil(t, err)
-
 	buf := sn.ToBuffer()
 	assert.Equal(t, sn.Len(), uint64(len(buf)))
 
@@ -85,16 +79,19 @@ func TestSegmentNode_WithDeletions_InitializingFromBufferTooLarge(t *testing.T) 
 	// assert that ToBuffer() returns a buffer that is no longer than the useful
 	// length
 	assert.Equal(t, len(buf), len(snBuf.ToBuffer()))
+
+	assert.Equal(t, key, snBuf.Key())
+	assert.ElementsMatch(t, additions, snBuf.Additions().ToArray())
+	assert.ElementsMatch(t, deletions, snBuf.Deletions().ToArray())
 }
 
 func TestSegmentNode_WithoutDeletions_InitializingFromBufferTooLarge(t *testing.T) {
-	additions := roaringset.NewBitmap(1, 2, 3, 4, 6)
-	deletions := roaringset.NewBitmap(5, 7) // ignored
-	key := uint8(123)
+	key := uint8(63)
+	additions := []uint64{1, 2, 3, 4, 6}
+	deletions := []uint64{5, 7} // ignored
 
-	sn, err := NewSegmentNode(key, additions, deletions)
+	sn, err := NewSegmentNode(key, roaringset.NewBitmap(additions...), roaringset.NewBitmap(deletions...))
 	require.Nil(t, err)
-
 	buf := sn.ToBuffer()
 	assert.Equal(t, sn.Len(), uint64(len(buf)))
 
@@ -108,4 +105,8 @@ func TestSegmentNode_WithoutDeletions_InitializingFromBufferTooLarge(t *testing.
 	// assert that ToBuffer() returns a buffer that is no longer than the useful
 	// length
 	assert.Equal(t, len(buf), len(snBuf.ToBuffer()))
+
+	assert.Equal(t, key, snBuf.Key())
+	assert.ElementsMatch(t, additions, snBuf.Additions().ToArray())
+	assert.True(t, snBuf.Deletions().IsEmpty())
 }
