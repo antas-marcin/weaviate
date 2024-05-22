@@ -65,7 +65,6 @@ func (c *CombinedCursor) First() (uint8, *sroar.Bitmap, bool) {
 }
 
 func (c *CombinedCursor) Next() (uint8, *sroar.Bitmap, bool) {
-	// fallback to First if no previous calls of First
 	if !c.inited {
 		return c.First()
 	}
@@ -113,8 +112,10 @@ func (c *CombinedCursor) getCursorIdsWithLowestKey() (uint8, map[int]struct{}) {
 			continue
 		}
 
-		if len(ids) == 0 || lowestKey == state.key {
+		if len(ids) == 0 {
 			lowestKey = state.key
+			ids[id] = struct{}{}
+		} else if lowestKey == state.key {
 			ids[id] = struct{}{}
 		} else if lowestKey > state.key {
 			lowestKey = state.key
