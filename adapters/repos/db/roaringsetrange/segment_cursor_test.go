@@ -27,25 +27,44 @@ func TestSegmentCursor(t *testing.T) {
 		key, layer, ok := c.First()
 		require.True(t, ok)
 		assert.Equal(t, uint8(0), key)
-		assert.True(t, layer.Additions.Contains(0))
-		assert.True(t, layer.Additions.Contains(1))
-		assert.True(t, layer.Deletions.Contains(2))
-		assert.True(t, layer.Deletions.Contains(3))
+		assert.Equal(t, []uint64{0, 1}, layer.Additions.ToArray())
+		assert.Equal(t, []uint64{2, 3}, layer.Deletions.ToArray())
 	})
 
 	t.Run("starting from beginning, page through all", func(t *testing.T) {
 		c := NewSegmentCursor(seg)
-		it := uint64(0)
+		i := uint64(0)
 		for key, layer, ok := c.First(); ok; key, layer, ok = c.Next() {
-			assert.Equal(t, uint8(it), key)
-			assert.True(t, layer.Additions.Contains(it*4))
-			assert.True(t, layer.Additions.Contains(it*4+1))
-			assert.True(t, layer.Deletions.Contains(it*4+2))
-			assert.True(t, layer.Deletions.Contains(it*4+3))
-			it++
+			assert.Equal(t, uint8(i), key)
+			assert.Equal(t, []uint64{i * 4, i*4 + 1}, layer.Additions.ToArray())
+
+			if i == 0 {
+				assert.Equal(t, []uint64{2, 3}, layer.Deletions.ToArray())
+			} else {
+				assert.True(t, layer.Deletions.IsEmpty())
+			}
+			i++
 		}
 
-		assert.Equal(t, uint64(5), it)
+		assert.Equal(t, uint64(5), i)
+	})
+
+	t.Run("no first, page through all", func(t *testing.T) {
+		c := NewSegmentCursor(seg)
+		i := uint64(0)
+		for key, layer, ok := c.Next(); ok; key, layer, ok = c.Next() {
+			assert.Equal(t, uint8(i), key)
+			assert.Equal(t, []uint64{i * 4, i*4 + 1}, layer.Additions.ToArray())
+
+			if i == 0 {
+				assert.Equal(t, []uint64{2, 3}, layer.Deletions.ToArray())
+			} else {
+				assert.True(t, layer.Deletions.IsEmpty())
+			}
+			i++
+		}
+
+		assert.Equal(t, uint64(5), i)
 	})
 }
 
@@ -55,7 +74,7 @@ func createDummySegment(t *testing.T, count uint64) []byte {
 	for i := uint64(0); i < count; i++ {
 		key := uint8(i)
 		add := roaringset.NewBitmap(i*4, i*4+1)
-		del := roaringset.NewBitmap(i*4+2, i*4+3)
+		del := roaringset.NewBitmap(i*4+2, i*4+3) // ignored for key != 0
 		sn, err := NewSegmentNode(key, add, del)
 		require.Nil(t, err)
 
