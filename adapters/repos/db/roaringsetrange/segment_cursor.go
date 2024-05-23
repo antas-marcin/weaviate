@@ -46,10 +46,10 @@ func (c *SegmentCursor) Next() (uint8, roaringset.BitmapLayer, bool) {
 	}
 
 	sn := NewSegmentNodeFromBuffer(c.data[c.nextOffset:])
-	layer := roaringset.BitmapLayer{
+	c.nextOffset += sn.Len()
+
+	return sn.Key(), roaringset.BitmapLayer{
 		Additions: sn.Additions(),
 		Deletions: sn.Deletions(),
-	}
-	c.nextOffset += sn.Len()
-	return sn.Key(), layer, true
+	}, true
 }
