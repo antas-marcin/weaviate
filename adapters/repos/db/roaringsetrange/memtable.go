@@ -118,5 +118,8 @@ func (n *MemtableNode) Additions() *sroar.Bitmap {
 }
 
 func (n *MemtableNode) Deletions() *sroar.Bitmap {
+	if n.key != 0 {
+		return sroar.NewBitmap()
+	}
 	return n.deletions
 }
