@@ -21,8 +21,8 @@ func (s *segment) newRoaringSetRangeCursor() *roaringsetrange.SegmentCursor {
 
 func (sg *SegmentGroup) newRoaringSetRangeCursors() ([]roaringsetrange.InnerCursor, func()) {
 	sg.maintenanceLock.RLock()
-	cursors := make([]roaringsetrange.InnerCursor, len(sg.segments))
 
+	cursors := make([]roaringsetrange.InnerCursor, len(sg.segments))
 	for i, segment := range sg.segments {
 		cursors[i] = segment.newRoaringSetRangeCursor()
 	}
