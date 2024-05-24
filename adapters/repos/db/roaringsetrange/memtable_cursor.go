@@ -37,8 +37,8 @@ func (c *MemtableCursor) Next() (uint8, roaringset.BitmapLayer, bool) {
 	mn := c.nodes[c.nextPos]
 	c.nextPos++
 
-	return mn.Key(), roaringset.BitmapLayer{
-		Additions: mn.Additions(),
-		Deletions: mn.Deletions(),
+	return mn.Key, roaringset.BitmapLayer{
+		Additions: mn.Additions,
+		Deletions: mn.Deletions,
 	}, true
 }
