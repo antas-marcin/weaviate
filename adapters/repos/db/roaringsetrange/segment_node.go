@@ -84,9 +84,7 @@ func (sn *SegmentNode) Key() uint8 {
 	return rw.ReadUint8()
 }
 
-func NewSegmentNode(
-	key uint8, additions, deletions *sroar.Bitmap,
-) (*SegmentNode, error) {
+func NewSegmentNode(key uint8, additions, deletions *sroar.Bitmap) (*SegmentNode, error) {
 	additionsBuf := additions.ToBuffer()
 	var deletionsBuf []byte
 
