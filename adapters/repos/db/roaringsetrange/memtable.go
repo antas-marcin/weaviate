@@ -82,9 +82,9 @@ func (m *Memtable) Nodes() []*MemtableNode {
 
 	nodes := make([]*MemtableNode, 1, 1+len(m.bitsAdditions))
 	nodes[0] = &MemtableNode{
-		key:       0,
-		additions: roaringset.Condense(m.nnAdditions),
-		deletions: roaringset.Condense(m.nnDeletions),
+		Key:       0,
+		Additions: roaringset.Condense(m.nnAdditions),
+		Deletions: roaringset.Condense(m.nnDeletions),
 	}
 
 	bmEmpty := sroar.NewBitmap()
@@ -93,9 +93,9 @@ func (m *Memtable) Nodes() []*MemtableNode {
 		if bitAdditions, ok := m.bitsAdditions[i]; ok && !bitAdditions.IsEmpty() {
 			l++
 			nodes = append(nodes, &MemtableNode{
-				key:       i + 1,
-				additions: roaringset.Condense(bitAdditions),
-				deletions: bmEmpty,
+				Key:       i + 1,
+				Additions: roaringset.Condense(bitAdditions),
+				Deletions: bmEmpty,
 			})
 		}
 	}
@@ -104,22 +104,7 @@ func (m *Memtable) Nodes() []*MemtableNode {
 }
 
 type MemtableNode struct {
-	key       uint8
-	additions *sroar.Bitmap
-	deletions *sroar.Bitmap
-}
-
-func (n *MemtableNode) Key() uint8 {
-	return n.key
-}
-
-func (n *MemtableNode) Additions() *sroar.Bitmap {
-	return n.additions
-}
-
-func (n *MemtableNode) Deletions() *sroar.Bitmap {
-	if n.key != 0 {
-		return sroar.NewBitmap()
-	}
-	return n.deletions
+	Key       uint8
+	Additions *sroar.Bitmap
+	Deletions *sroar.Bitmap
 }
