@@ -40,7 +40,7 @@ func (c *cursorRoaringSetRange) Close() {
 }
 
 func (b *Bucket) CursorRoaringSetRange() CursorRoaringSetRange {
-	MustBeExpectedStrategy(b.strategy, StrategyRoaringSet)
+	MustBeExpectedStrategy(b.strategy, StrategyRoaringSetRange)
 
 	b.flushLock.RLock()
 
