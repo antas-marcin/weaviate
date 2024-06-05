@@ -29,6 +29,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 		filters.OperatorGreaterThanEqual,
 		filters.OperatorGreaterThan,
 		filters.OperatorLessThanEqual,
+		filters.OperatorLessThan,
 	}
 
 	t.Run("with empty CursorRoaringSetRange", func(t *testing.T) {
@@ -222,6 +223,57 @@ func TestReaderRoaringSetRange(t *testing.T) {
 			},
 			{
 				operator: filters.OperatorLessThanEqual,
+				value:    18446744073709551615,
+				expected: []uint64{10, 20, 15, 25, 113, 213},
+			},
+			// less than
+			{
+				operator: filters.OperatorLessThan,
+				value:    0,
+				expected: []uint64{},
+			},
+			{
+				operator: filters.OperatorLessThan,
+				value:    1,
+				expected: []uint64{10, 20},
+			},
+			{
+				operator: filters.OperatorLessThan,
+				value:    4,
+				expected: []uint64{10, 20},
+			},
+			{
+				operator: filters.OperatorLessThan,
+				value:    5,
+				expected: []uint64{10, 20},
+			},
+			{
+				operator: filters.OperatorLessThan,
+				value:    6,
+				expected: []uint64{10, 20, 15, 25},
+			},
+			{
+				operator: filters.OperatorLessThan,
+				value:    12,
+				expected: []uint64{10, 20, 15, 25},
+			},
+			{
+				operator: filters.OperatorLessThan,
+				value:    13,
+				expected: []uint64{10, 20, 15, 25},
+			},
+			{
+				operator: filters.OperatorLessThan,
+				value:    14,
+				expected: []uint64{10, 20, 15, 25, 113, 213},
+			},
+			{
+				operator: filters.OperatorLessThan,
+				value:    12345678901234567890,
+				expected: []uint64{10, 20, 15, 25, 113, 213},
+			},
+			{
+				operator: filters.OperatorLessThan,
 				value:    18446744073709551615,
 				expected: []uint64{10, 20, 15, 25, 113, 213},
 			},

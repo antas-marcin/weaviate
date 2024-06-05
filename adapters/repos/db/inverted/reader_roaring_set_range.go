@@ -54,8 +54,8 @@ func (r *ReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error)
 		return r.greaterThan(ctx)
 	case filters.OperatorGreaterThanEqual:
 		return r.greaterThanEqual(ctx)
-	// case filters.OperatorLessThan:
-	// 	return r.lessThan(ctx)
+	case filters.OperatorLessThan:
+		return r.lessThan(ctx)
 	case filters.OperatorLessThanEqual:
 		return r.lessThanEqual(ctx)
 
@@ -145,6 +145,26 @@ func (r *ReaderRoaringSetRange) lessThanEqual(ctx context.Context) (*sroar.Bitma
 	}
 
 	partialBM, err := r.mergeGreaterThanEqual(ctx, resBM.Clone(), cursor, r.value+1)
+	if err != nil {
+		return nil, err
+	}
+	resBM.AndNot(partialBM)
+	return resBM, nil
+}
+
+func (r *ReaderRoaringSetRange) lessThan(ctx context.Context) (*sroar.Bitmap, error) {
+	// no value is < 0
+	if r.value == 0 {
+		return sroar.NewBitmap(), nil
+	}
+
+	resBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
+	if !ok {
+		return resBM, err
+	}
+	defer cursor.close()
+
+	partialBM, err := r.mergeGreaterThanEqual(ctx, resBM.Clone(), cursor, r.value)
 	if err != nil {
 		return nil, err
 	}
