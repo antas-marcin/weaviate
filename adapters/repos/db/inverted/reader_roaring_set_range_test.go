@@ -14,6 +14,7 @@ package inverted
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"testing"
 
@@ -30,6 +31,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 		filters.OperatorGreaterThan,
 		filters.OperatorLessThanEqual,
 		filters.OperatorLessThan,
+		filters.OperatorEqual,
 	}
 
 	t.Run("with empty CursorRoaringSetRange", func(t *testing.T) {
@@ -37,7 +39,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 			return newFakeCursorRoaringSetRange(map[uint64]uint64{})
 		}
 
-		values := []uint64{0, 1, 4, 5, 6, 12, 13, 14, 12345678901234567890, 18446744073709551615}
+		values := []uint64{0, 1, 4, 5, 6, 12, 13, 14, 12345678901234567890, math.MaxUint64}
 
 		for _, operator := range operators {
 			t.Run(operator.Name(), func(t *testing.T) {
@@ -121,7 +123,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 			},
 			{
 				operator: filters.OperatorGreaterThanEqual,
-				value:    18446744073709551615,
+				value:    math.MaxUint64,
 				expected: []uint64{},
 			},
 			// greater than
@@ -172,7 +174,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 			},
 			{
 				operator: filters.OperatorGreaterThan,
-				value:    18446744073709551615,
+				value:    math.MaxUint64,
 				expected: []uint64{},
 			},
 			// less than equal
@@ -223,7 +225,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 			},
 			{
 				operator: filters.OperatorLessThanEqual,
-				value:    18446744073709551615,
+				value:    math.MaxUint64,
 				expected: []uint64{10, 20, 15, 25, 113, 213},
 			},
 			// less than
@@ -274,8 +276,59 @@ func TestReaderRoaringSetRange(t *testing.T) {
 			},
 			{
 				operator: filters.OperatorLessThan,
-				value:    18446744073709551615,
+				value:    math.MaxUint64,
 				expected: []uint64{10, 20, 15, 25, 113, 213},
+			},
+			// equal
+			{
+				operator: filters.OperatorEqual,
+				value:    0,
+				expected: []uint64{10, 20},
+			},
+			{
+				operator: filters.OperatorEqual,
+				value:    1,
+				expected: []uint64{},
+			},
+			{
+				operator: filters.OperatorEqual,
+				value:    4,
+				expected: []uint64{},
+			},
+			{
+				operator: filters.OperatorEqual,
+				value:    5,
+				expected: []uint64{15, 25},
+			},
+			{
+				operator: filters.OperatorEqual,
+				value:    6,
+				expected: []uint64{},
+			},
+			{
+				operator: filters.OperatorEqual,
+				value:    12,
+				expected: []uint64{},
+			},
+			{
+				operator: filters.OperatorEqual,
+				value:    13,
+				expected: []uint64{113, 213},
+			},
+			{
+				operator: filters.OperatorEqual,
+				value:    14,
+				expected: []uint64{},
+			},
+			{
+				operator: filters.OperatorEqual,
+				value:    12345678901234567890,
+				expected: []uint64{},
+			},
+			{
+				operator: filters.OperatorEqual,
+				value:    math.MaxUint64,
+				expected: []uint64{},
 			},
 		}
 

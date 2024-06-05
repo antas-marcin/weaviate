@@ -46,8 +46,8 @@ func (r *ReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error)
 	}
 
 	switch r.operator {
-	// case filters.OperatorEqual:
-	// 	return r.equal(ctx)
+	case filters.OperatorEqual:
+		return r.equal(ctx)
 	// case filters.OperatorNotEqual:
 	// 	return r.notEqual(ctx)
 	case filters.OperatorGreaterThan:
@@ -169,6 +169,44 @@ func (r *ReaderRoaringSetRange) lessThan(ctx context.Context) (*sroar.Bitmap, er
 		return nil, err
 	}
 	resBM.AndNot(partialBM)
+	return resBM, nil
+}
+
+func (r *ReaderRoaringSetRange) equal(ctx context.Context) (*sroar.Bitmap, error) {
+	if r.value == 0 {
+		return r.lessThanEqual(ctx)
+	}
+	if r.value == math.MaxUint64 {
+		return r.greaterThanEqual(ctx)
+	}
+
+	resBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
+	if !ok {
+		return resBM, err
+	}
+	defer cursor.close()
+
+	resBM1 := resBM.Clone()
+	value1 := r.value + 1
+	for bit, bitBM, ok := cursor.next(); ok; bit, bitBM, ok = cursor.next() {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
+		var b uint64 = 1 << (bit - 1)
+		if r.value&b != 0 {
+			resBM.And(bitBM)
+		} else {
+			resBM.Or(bitBM)
+		}
+		if value1&b != 0 {
+			resBM1.And(bitBM)
+		} else {
+			resBM1.Or(bitBM)
+		}
+	}
+
+	resBM.AndNot(resBM1)
 	return resBM, nil
 }
 
