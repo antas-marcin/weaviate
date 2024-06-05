@@ -12,17 +12,110 @@
 package inverted
 
 import (
+	"context"
+	"fmt"
 	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/weaviate/sroar"
+	"github.com/weaviate/weaviate/adapters/repos/db/lsmkv"
+	"github.com/weaviate/weaviate/entities/filters"
 )
 
-func TestRsrCursor(t *testing.T) {
-	t.Run("empty CursorRoaringSetRange", func(t *testing.T) {
-		c := &rsrCursor{cursor: newFakeCursorRoaringSetRange(map[uint64]uint64{})}
+func TestReaderRoaringSetRange(t *testing.T) {
+	t.Run("greaterThanEqual", func(t *testing.T) {
+		type testCase struct {
+			value    uint64
+			expected []uint64
+		}
+
+		testCases := []testCase{
+			{
+				value:    0,
+				expected: []uint64{10, 20, 15, 25, 113, 213},
+			},
+			{
+				value:    1,
+				expected: []uint64{15, 25, 113, 213},
+			},
+			{
+				value:    4,
+				expected: []uint64{15, 25, 113, 213},
+			},
+			{
+				value:    5,
+				expected: []uint64{15, 25, 113, 213},
+			},
+			{
+				value:    6,
+				expected: []uint64{113, 213},
+			},
+			{
+				value:    12,
+				expected: []uint64{113, 213},
+			},
+			{
+				value:    13,
+				expected: []uint64{113, 213},
+			},
+			{
+				value:    14,
+				expected: []uint64{},
+			},
+			{
+				value:    12345678901234567890,
+				expected: []uint64{},
+			},
+		}
+
+		t.Run("with empty CursorRoaringSetRange", func(t *testing.T) {
+			cursorFnEmpty := func() lsmkv.CursorRoaringSetRange {
+				return newFakeCursorRoaringSetRange(map[uint64]uint64{})
+			}
+
+			for _, tc := range testCases {
+				t.Run(fmt.Sprintf("value %d", tc.value), func(t *testing.T) {
+					reader := NewReaderRoaringSetRange(tc.value, filters.OperatorGreaterThanEqual, cursorFnEmpty)
+					bm, err := reader.Read(context.Background())
+
+					assert.NoError(t, err)
+					require.NotNil(t, bm)
+					assert.True(t, bm.IsEmpty())
+				})
+			}
+		})
+
+		t.Run("with populated CursorRoaringSetRange", func(t *testing.T) {
+			cursorFnPopulated := func() lsmkv.CursorRoaringSetRange {
+				return newFakeCursorRoaringSetRange(map[uint64]uint64{
+					113: 13, // 1101
+					213: 13, // 1101
+					15:  5,  // 0101
+					25:  5,  // 0101
+					10:  0,  // 0000
+					20:  0,  // 0000
+				})
+			}
+
+			for _, tc := range testCases {
+				t.Run(fmt.Sprintf("value %d", tc.value), func(t *testing.T) {
+					reader := NewReaderRoaringSetRange(tc.value, filters.OperatorGreaterThanEqual, cursorFnPopulated)
+					bm, err := reader.Read(context.Background())
+
+					assert.NoError(t, err)
+					require.NotNil(t, bm)
+					assert.ElementsMatch(t, tc.expected, bm.ToArray())
+				})
+			}
+		})
+	})
+}
+
+func TestNoGapsCursor(t *testing.T) {
+	t.Run("with empty CursorRoaringSetRange", func(t *testing.T) {
+		c := &noGapsCursor{cursor: newFakeCursorRoaringSetRange(map[uint64]uint64{})}
 
 		k, v, ok := c.first()
 		require.Equal(t, uint8(0), k)
@@ -42,8 +135,8 @@ func TestRsrCursor(t *testing.T) {
 		assert.Nil(t, v)
 	})
 
-	t.Run("non-empty CursorRoaringSetRange", func(t *testing.T) {
-		c := &rsrCursor{cursor: newFakeCursorRoaringSetRange(map[uint64]uint64{
+	t.Run("with populated CursorRoaringSetRange", func(t *testing.T) {
+		c := &noGapsCursor{cursor: newFakeCursorRoaringSetRange(map[uint64]uint64{
 			113: 13, // 1101
 			213: 13, // 1101
 			15:  5,  // 0101
@@ -93,7 +186,7 @@ func TestFakeCursorRoaringSetRange(t *testing.T) {
 		assert.Nil(t, v)
 	})
 
-	t.Run("non-empty", func(t *testing.T) {
+	t.Run("populated", func(t *testing.T) {
 		c := newFakeCursorRoaringSetRange(map[uint64]uint64{
 			113: 13, // 1101
 			213: 13, // 1101

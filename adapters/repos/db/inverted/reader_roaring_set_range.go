@@ -47,8 +47,8 @@ func (r *ReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error)
 	// 	return r.notEqual(ctx)
 	// case filters.OperatorGreaterThan:
 	// 	return r.greaterThan(ctx)
-	// case filters.OperatorGreaterThanEqual:
-	// 	return r.greaterThanEqual(ctx)
+	case filters.OperatorGreaterThanEqual:
+		return r.greaterThanEqual(ctx)
 	// case filters.OperatorLessThan:
 	// 	return r.lessThan(ctx)
 	// case filters.OperatorLessThanEqual:
@@ -59,103 +59,48 @@ func (r *ReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error)
 	}
 }
 
-type rsrCursor struct {
-	cursor  lsmkv.CursorRoaringSetRange
-	key     uint8
-	started bool
+func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 
-	lastKey uint8
-	lastVal *sroar.Bitmap
-	lastOk  bool
+	c := r.cursorFn()
+	defer c.Close()
+
+	cursor := &noGapsCursor{cursor: c}
+	_, nonNullBM, _ := cursor.first()
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	// in non-null bm is empty or non-existent, no docIds are stored
+	if nonNullBM == nil || nonNullBM.IsEmpty() {
+		return sroar.NewBitmap(), nil
+	}
+
+	resBM := nonNullBM.Clone()
+
+	// all values are >= 0
+	if r.value == 0 {
+		return resBM, nil
+	}
+
+	// And/Or handle properly nil bitmaps, so bitBM = nil is fine
+	for bit, bitBM, ok := cursor.next(); ok; bit, bitBM, ok = cursor.next() {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
+		if r.value&(1<<(bit-1)) != 0 {
+			resBM.And(bitBM)
+		} else {
+			resBM.Or(bitBM)
+		}
+	}
+
+	return resBM, nil
 }
-
-func (c *rsrCursor) first() (uint8, *sroar.Bitmap, bool) {
-	c.started = true
-
-	c.lastKey, c.lastVal, c.lastOk = c.cursor.First()
-
-	c.key = 1
-	if c.lastOk && c.lastKey == 0 {
-		return 0, c.lastVal, true
-	}
-	return 0, nil, true
-}
-
-func (c *rsrCursor) next() (uint8, *sroar.Bitmap, bool) {
-	if !c.started {
-		return c.first()
-	}
-
-	if c.key >= 65 {
-		return 0, nil, false
-	}
-
-	for c.lastOk && c.lastKey < c.key {
-		c.lastKey, c.lastVal, c.lastOk = c.cursor.Next()
-	}
-
-	key := c.key
-	c.key++
-	if c.lastOk && c.lastKey == key {
-		return key, c.lastVal, true
-	}
-	return key, nil, true
-}
-
-// func newRsrCursor(cursor *lsmkv.CursorRoaringSetRange) *rsrCursor {
-// 	return &rsrCursor{
-// 		cursor:  cursor,
-// 		key : 0,
-// 		lastKey: 0,
-// 	}
-// }
-
-// func (c *rsrCursor) First() (uint8, *sroar.Bitmap, bool) {
-// 	c.lastKey = 0
-// 	k, v, ok := c.cur.First()
-
-// 	if ok {
-// 		if k == c.lastKey {
-
-// 		}
-// 	}
-
-// }
-
-// func (c *rsrCursor) Next() (uint8, *sroar.Bitmap, bool) {
-
-// 	k, v, ok := c.cur.First()
-
-// }
-
-// // greaterThan reads from the specified value to the end. The first row is only
-// // included if allowEqual==true, otherwise it starts with the next one
-// func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
-// 	cursor := r.cursorFn()
-// 	defer cursor.Close()
-
-// 	// 0 - 64
-
-// 	k, v, ok := cursor.First()
-
-// 	for k, v := c.Seek(rr.value); k != nil; k, v = c.Next() {
-// 		if err := ctx.Err(); err != nil {
-// 			return err
-// 		}
-
-// 		if bytes.Equal(k, rr.value) && !allowEqual {
-// 			continue
-// 		}
-
-// 		if continueReading, err := readFn(k, v); err != nil {
-// 			return err
-// 		} else if !continueReading {
-// 			break
-// 		}
-// 	}
-
-// 	return nil
-// }
 
 // func (rr *RowReaderRoaringSet) equal(ctx context.Context) error {
 // 	v, err := rr.equalHelper(ctx)
@@ -299,3 +244,46 @@ func (c *rsrCursor) next() (uint8, *sroar.Bitmap, bool) {
 
 // 	return rr.getter(rr.value)
 // }
+
+type noGapsCursor struct {
+	cursor  lsmkv.CursorRoaringSetRange
+	key     uint8
+	started bool
+
+	lastKey uint8
+	lastVal *sroar.Bitmap
+	lastOk  bool
+}
+
+func (c *noGapsCursor) first() (uint8, *sroar.Bitmap, bool) {
+	c.started = true
+
+	c.lastKey, c.lastVal, c.lastOk = c.cursor.First()
+
+	c.key = 1
+	if c.lastOk && c.lastKey == 0 {
+		return 0, c.lastVal, true
+	}
+	return 0, nil, true
+}
+
+func (c *noGapsCursor) next() (uint8, *sroar.Bitmap, bool) {
+	if !c.started {
+		return c.first()
+	}
+
+	if c.key >= 65 {
+		return 0, nil, false
+	}
+
+	for c.lastOk && c.lastKey < c.key {
+		c.lastKey, c.lastVal, c.lastOk = c.cursor.Next()
+	}
+
+	key := c.key
+	c.key++
+	if c.lastOk && c.lastKey == key {
+		return key, c.lastVal, true
+	}
+	return key, nil, true
+}
