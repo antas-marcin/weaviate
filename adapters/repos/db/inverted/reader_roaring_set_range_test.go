@@ -25,91 +25,167 @@ import (
 )
 
 func TestReaderRoaringSetRange(t *testing.T) {
-	t.Run("greaterThanEqual", func(t *testing.T) {
+	operators := map[filters.Operator]string{
+		filters.OperatorGreaterThanEqual: "OperatorGreaterThanEqual",
+		filters.OperatorGreaterThan:      "OperatorGreaterThan",
+	}
+
+	t.Run("with empty CursorRoaringSetRange", func(t *testing.T) {
+		cursorFnEmpty := func() lsmkv.CursorRoaringSetRange {
+			return newFakeCursorRoaringSetRange(map[uint64]uint64{})
+		}
+
+		values := []uint64{0, 1, 4, 5, 6, 12, 13, 14, 12345678901234567890, 18446744073709551615}
+
+		for operator, operatorName := range operators {
+			t.Run(operatorName, func(t *testing.T) {
+				for _, value := range values {
+					t.Run(fmt.Sprintf("value %d", value), func(t *testing.T) {
+						reader := NewReaderRoaringSetRange(value, operator, cursorFnEmpty)
+						bm, err := reader.Read(context.Background())
+
+						assert.NoError(t, err)
+						require.NotNil(t, bm)
+						assert.True(t, bm.IsEmpty())
+					})
+				}
+			})
+		}
+	})
+	t.Run("with populated CursorRoaringSetRange", func(t *testing.T) {
+		cursorFnPopulated := func() lsmkv.CursorRoaringSetRange {
+			return newFakeCursorRoaringSetRange(map[uint64]uint64{
+				113: 13, // 1101
+				213: 13, // 1101
+				15:  5,  // 0101
+				25:  5,  // 0101
+				10:  0,  // 0000
+				20:  0,  // 0000
+			})
+		}
+
 		type testCase struct {
+			operator filters.Operator
 			value    uint64
 			expected []uint64
 		}
 
 		testCases := []testCase{
 			{
+				operator: filters.OperatorGreaterThanEqual,
 				value:    0,
 				expected: []uint64{10, 20, 15, 25, 113, 213},
 			},
 			{
+				operator: filters.OperatorGreaterThanEqual,
 				value:    1,
 				expected: []uint64{15, 25, 113, 213},
 			},
 			{
+				operator: filters.OperatorGreaterThanEqual,
 				value:    4,
 				expected: []uint64{15, 25, 113, 213},
 			},
 			{
+				operator: filters.OperatorGreaterThanEqual,
 				value:    5,
 				expected: []uint64{15, 25, 113, 213},
 			},
 			{
+				operator: filters.OperatorGreaterThanEqual,
 				value:    6,
 				expected: []uint64{113, 213},
 			},
 			{
+				operator: filters.OperatorGreaterThanEqual,
 				value:    12,
 				expected: []uint64{113, 213},
 			},
 			{
+				operator: filters.OperatorGreaterThanEqual,
 				value:    13,
 				expected: []uint64{113, 213},
 			},
 			{
+				operator: filters.OperatorGreaterThanEqual,
 				value:    14,
 				expected: []uint64{},
 			},
 			{
+				operator: filters.OperatorGreaterThanEqual,
 				value:    12345678901234567890,
+				expected: []uint64{},
+			},
+			{
+				operator: filters.OperatorGreaterThanEqual,
+				value:    18446744073709551615,
+				expected: []uint64{},
+			},
+
+			{
+				operator: filters.OperatorGreaterThan,
+				value:    0,
+				expected: []uint64{15, 25, 113, 213},
+			},
+			{
+				operator: filters.OperatorGreaterThan,
+				value:    1,
+				expected: []uint64{15, 25, 113, 213},
+			},
+			{
+				operator: filters.OperatorGreaterThan,
+				value:    4,
+				expected: []uint64{15, 25, 113, 213},
+			},
+			{
+				operator: filters.OperatorGreaterThan,
+				value:    5,
+				expected: []uint64{113, 213},
+			},
+			{
+				operator: filters.OperatorGreaterThan,
+				value:    6,
+				expected: []uint64{113, 213},
+			},
+			{
+				operator: filters.OperatorGreaterThan,
+				value:    12,
+				expected: []uint64{113, 213},
+			},
+			{
+				operator: filters.OperatorGreaterThan,
+				value:    13,
+				expected: []uint64{},
+			},
+			{
+				operator: filters.OperatorGreaterThan,
+				value:    14,
+				expected: []uint64{},
+			},
+			{
+				operator: filters.OperatorGreaterThan,
+				value:    12345678901234567890,
+				expected: []uint64{},
+			},
+			{
+				operator: filters.OperatorGreaterThan,
+				value:    18446744073709551615,
 				expected: []uint64{},
 			},
 		}
 
-		t.Run("with empty CursorRoaringSetRange", func(t *testing.T) {
-			cursorFnEmpty := func() lsmkv.CursorRoaringSetRange {
-				return newFakeCursorRoaringSetRange(map[uint64]uint64{})
-			}
-
-			for _, tc := range testCases {
+		for _, tc := range testCases {
+			t.Run(operators[tc.operator], func(t *testing.T) {
 				t.Run(fmt.Sprintf("value %d", tc.value), func(t *testing.T) {
-					reader := NewReaderRoaringSetRange(tc.value, filters.OperatorGreaterThanEqual, cursorFnEmpty)
-					bm, err := reader.Read(context.Background())
-
-					assert.NoError(t, err)
-					require.NotNil(t, bm)
-					assert.True(t, bm.IsEmpty())
-				})
-			}
-		})
-
-		t.Run("with populated CursorRoaringSetRange", func(t *testing.T) {
-			cursorFnPopulated := func() lsmkv.CursorRoaringSetRange {
-				return newFakeCursorRoaringSetRange(map[uint64]uint64{
-					113: 13, // 1101
-					213: 13, // 1101
-					15:  5,  // 0101
-					25:  5,  // 0101
-					10:  0,  // 0000
-					20:  0,  // 0000
-				})
-			}
-
-			for _, tc := range testCases {
-				t.Run(fmt.Sprintf("value %d", tc.value), func(t *testing.T) {
-					reader := NewReaderRoaringSetRange(tc.value, filters.OperatorGreaterThanEqual, cursorFnPopulated)
+					reader := NewReaderRoaringSetRange(tc.value, tc.operator, cursorFnPopulated)
 					bm, err := reader.Read(context.Background())
 
 					assert.NoError(t, err)
 					require.NotNil(t, bm)
 					assert.ElementsMatch(t, tc.expected, bm.ToArray())
 				})
-			}
-		})
+			})
+		}
 	})
 }
 

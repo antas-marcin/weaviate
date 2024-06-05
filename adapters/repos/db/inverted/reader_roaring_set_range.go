@@ -14,6 +14,7 @@ package inverted
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/weaviate/sroar"
 	"github.com/weaviate/weaviate/adapters/repos/db/lsmkv"
@@ -40,15 +41,19 @@ func NewReaderRoaringSetRange(value uint64, operator filters.Operator,
 // keysOnly==true, the values argument in the readFn will always be nil on all
 // requests involving cursors
 func (r *ReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
 	switch r.operator {
 	// case filters.OperatorEqual:
 	// 	return r.equal(ctx)
 	// case filters.OperatorNotEqual:
 	// 	return r.notEqual(ctx)
-	// case filters.OperatorGreaterThan:
-	// 	return r.greaterThan(ctx)
+	case filters.OperatorGreaterThan:
+		return r.greaterThan(ctx, r.value)
 	case filters.OperatorGreaterThanEqual:
-		return r.greaterThanEqual(ctx)
+		return r.greaterThanEqual(ctx, r.value)
 	// case filters.OperatorLessThan:
 	// 	return r.lessThan(ctx)
 	// case filters.OperatorLessThanEqual:
@@ -59,11 +64,7 @@ func (r *ReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error)
 	}
 }
 
-func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
+func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context, value uint64) (*sroar.Bitmap, error) {
 	c := r.cursorFn()
 	defer c.Close()
 
@@ -82,7 +83,7 @@ func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bi
 	resBM := nonNullBM.Clone()
 
 	// all values are >= 0
-	if r.value == 0 {
+	if value == 0 {
 		return resBM, nil
 	}
 
@@ -92,7 +93,7 @@ func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bi
 			return nil, ctx.Err()
 		}
 
-		if r.value&(1<<(bit-1)) != 0 {
+		if value&(1<<(bit-1)) != 0 {
 			resBM.And(bitBM)
 		} else {
 			resBM.Or(bitBM)
@@ -100,6 +101,15 @@ func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bi
 	}
 
 	return resBM, nil
+}
+
+func (r *ReaderRoaringSetRange) greaterThan(ctx context.Context, value uint64) (*sroar.Bitmap, error) {
+	if value == math.MaxUint64 {
+		// there is no value greater than max uint64
+		return sroar.NewBitmap(), nil
+	}
+
+	return r.greaterThanEqual(ctx, value+1)
 }
 
 // func (rr *RowReaderRoaringSet) equal(ctx context.Context) error {
