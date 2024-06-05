@@ -25,9 +25,10 @@ import (
 )
 
 func TestReaderRoaringSetRange(t *testing.T) {
-	operators := map[filters.Operator]string{
-		filters.OperatorGreaterThanEqual: "OperatorGreaterThanEqual",
-		filters.OperatorGreaterThan:      "OperatorGreaterThan",
+	operators := []filters.Operator{
+		filters.OperatorGreaterThanEqual,
+		filters.OperatorGreaterThan,
+		filters.OperatorLessThanEqual,
 	}
 
 	t.Run("with empty CursorRoaringSetRange", func(t *testing.T) {
@@ -37,8 +38,8 @@ func TestReaderRoaringSetRange(t *testing.T) {
 
 		values := []uint64{0, 1, 4, 5, 6, 12, 13, 14, 12345678901234567890, 18446744073709551615}
 
-		for operator, operatorName := range operators {
-			t.Run(operatorName, func(t *testing.T) {
+		for _, operator := range operators {
+			t.Run(operator.Name(), func(t *testing.T) {
 				for _, value := range values {
 					t.Run(fmt.Sprintf("value %d", value), func(t *testing.T) {
 						reader := NewReaderRoaringSetRange(value, operator, cursorFnEmpty)
@@ -71,6 +72,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 		}
 
 		testCases := []testCase{
+			// greater than equal
 			{
 				operator: filters.OperatorGreaterThanEqual,
 				value:    0,
@@ -121,7 +123,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 				value:    18446744073709551615,
 				expected: []uint64{},
 			},
-
+			// greater than
 			{
 				operator: filters.OperatorGreaterThan,
 				value:    0,
@@ -172,10 +174,61 @@ func TestReaderRoaringSetRange(t *testing.T) {
 				value:    18446744073709551615,
 				expected: []uint64{},
 			},
+			// less than equal
+			{
+				operator: filters.OperatorLessThanEqual,
+				value:    0,
+				expected: []uint64{10, 20},
+			},
+			{
+				operator: filters.OperatorLessThanEqual,
+				value:    1,
+				expected: []uint64{10, 20},
+			},
+			{
+				operator: filters.OperatorLessThanEqual,
+				value:    4,
+				expected: []uint64{10, 20},
+			},
+			{
+				operator: filters.OperatorLessThanEqual,
+				value:    5,
+				expected: []uint64{10, 20, 15, 25},
+			},
+			{
+				operator: filters.OperatorLessThanEqual,
+				value:    6,
+				expected: []uint64{10, 20, 15, 25},
+			},
+			{
+				operator: filters.OperatorLessThanEqual,
+				value:    12,
+				expected: []uint64{10, 20, 15, 25},
+			},
+			{
+				operator: filters.OperatorLessThanEqual,
+				value:    13,
+				expected: []uint64{10, 20, 15, 25, 113, 213},
+			},
+			{
+				operator: filters.OperatorLessThanEqual,
+				value:    14,
+				expected: []uint64{10, 20, 15, 25, 113, 213},
+			},
+			{
+				operator: filters.OperatorLessThanEqual,
+				value:    12345678901234567890,
+				expected: []uint64{10, 20, 15, 25, 113, 213},
+			},
+			{
+				operator: filters.OperatorLessThanEqual,
+				value:    18446744073709551615,
+				expected: []uint64{10, 20, 15, 25, 113, 213},
+			},
 		}
 
 		for _, tc := range testCases {
-			t.Run(operators[tc.operator], func(t *testing.T) {
+			t.Run(tc.operator.Name(), func(t *testing.T) {
 				t.Run(fmt.Sprintf("value %d", tc.value), func(t *testing.T) {
 					reader := NewReaderRoaringSetRange(tc.value, tc.operator, cursorFnPopulated)
 					bm, err := reader.Read(context.Background())

@@ -51,48 +51,134 @@ func (r *ReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error)
 	// case filters.OperatorNotEqual:
 	// 	return r.notEqual(ctx)
 	case filters.OperatorGreaterThan:
-		return r.greaterThan(ctx, r.value)
+		return r.greaterThan(ctx)
 	case filters.OperatorGreaterThanEqual:
-		return r.greaterThanEqual(ctx, r.value)
+		return r.greaterThanEqual(ctx)
 	// case filters.OperatorLessThan:
 	// 	return r.lessThan(ctx)
-	// case filters.OperatorLessThanEqual:
-	// 	return r.lessThanEqual(ctx)
+	case filters.OperatorLessThanEqual:
+		return r.lessThanEqual(ctx)
 
 	default:
-		return nil, fmt.Errorf("operator %v not supported for strategy %q", r.operator, lsmkv.StrategyRoaringSetRange)
+		return nil, fmt.Errorf("operator %v not supported for strategy %q", r.operator.Name(), lsmkv.StrategyRoaringSetRange)
 	}
 }
 
-func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context, value uint64) (*sroar.Bitmap, error) {
-	c := r.cursorFn()
-	defer c.Close()
+// func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
+// 	c := r.cursorFn()
+// 	cursor := &noGapsCursor{cursor: c}
+// 	defer c.Close()
 
-	cursor := &noGapsCursor{cursor: c}
-	_, nonNullBM, _ := cursor.first()
+// 	return r.gte(ctx, cursor, r.value)
+// }
 
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
+// func (r *ReaderRoaringSetRange) greaterThan(ctx context.Context) (*sroar.Bitmap, error) {
+// 	// there is no value greater than max uint64
+// 	if r.value == math.MaxUint64 {
+// 		return sroar.NewBitmap(), nil
+// 	}
+
+// 	c := r.cursorFn()
+// 	cursor := &noGapsCursor{cursor: c}
+// 	defer c.Close()
+
+// 	return r.gte(ctx, cursor, r.value+1)
+// }
+
+// func (r *ReaderRoaringSetRange) lessThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
+// 	c := r.cursorFn()
+// 	cursor := &noGapsCursor{cursor: c}
+// 	defer c.Close()
+
+// 	_, nonNullBM, _ := cursor.first()
+
+// 	if ctx.Err() != nil {
+// 		return nil, ctx.Err()
+// 	}
+
+// }
+
+// func (r *ReaderRoaringSetRange) getNonNullBMAndCursor(ctx context.Context) (*sroar.Bitmap, *noGapsCursor, error) {
+
+// }
+
+func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
+	resBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
+	if !ok {
+		return resBM, err
 	}
-
-	// in non-null bm is empty or non-existent, no docIds are stored
-	if nonNullBM == nil || nonNullBM.IsEmpty() {
-		return sroar.NewBitmap(), nil
-	}
-
-	resBM := nonNullBM.Clone()
+	defer cursor.close()
 
 	// all values are >= 0
-	if value == 0 {
+	if r.value == 0 {
 		return resBM, nil
 	}
 
-	// And/Or handle properly nil bitmaps, so bitBM = nil is fine
+	return r.mergeGreaterThanEqual(ctx, resBM, cursor, r.value)
+}
+
+func (r *ReaderRoaringSetRange) greaterThan(ctx context.Context) (*sroar.Bitmap, error) {
+	// no value is > max uint64
+	if r.value == math.MaxUint64 {
+		return sroar.NewBitmap(), nil
+	}
+
+	resBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
+	if !ok {
+		return resBM, err
+	}
+	defer cursor.close()
+
+	return r.mergeGreaterThanEqual(ctx, resBM, cursor, r.value+1)
+}
+
+func (r *ReaderRoaringSetRange) lessThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
+	resBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
+	if !ok {
+		return resBM, err
+	}
+	defer cursor.close()
+
+	// all values are <= max uint64
+	if r.value == math.MaxUint64 {
+		return resBM, nil
+	}
+
+	partialBM, err := r.mergeGreaterThanEqual(ctx, resBM.Clone(), cursor, r.value+1)
+	if err != nil {
+		return nil, err
+	}
+	resBM.AndNot(partialBM)
+	return resBM, nil
+}
+
+func (r *ReaderRoaringSetRange) nonNullBMWithCursor(ctx context.Context) (*sroar.Bitmap, *noGapsCursor, bool, error) {
+	cursor := &noGapsCursor{cursor: r.cursorFn()}
+	_, nonNullBM, _ := cursor.first()
+
+	// if non-null bm is nil or empty, no values are stored
+	if nonNullBM == nil || nonNullBM.IsEmpty() {
+		cursor.close()
+		return sroar.NewBitmap(), nil, false, nil
+	}
+
+	if ctx.Err() != nil {
+		cursor.close()
+		return nil, nil, false, ctx.Err()
+	}
+
+	return nonNullBM.Clone(), cursor, true, nil
+}
+
+func (r *ReaderRoaringSetRange) mergeGreaterThanEqual(ctx context.Context, resBM *sroar.Bitmap,
+	cursor *noGapsCursor, value uint64,
+) (*sroar.Bitmap, error) {
 	for bit, bitBM, ok := cursor.next(); ok; bit, bitBM, ok = cursor.next() {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 
+		// And/Or handle properly nil bitmaps, so bitBM == nil is fine
 		if value&(1<<(bit-1)) != 0 {
 			resBM.And(bitBM)
 		} else {
@@ -101,15 +187,6 @@ func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context, value uint
 	}
 
 	return resBM, nil
-}
-
-func (r *ReaderRoaringSetRange) greaterThan(ctx context.Context, value uint64) (*sroar.Bitmap, error) {
-	if value == math.MaxUint64 {
-		// there is no value greater than max uint64
-		return sroar.NewBitmap(), nil
-	}
-
-	return r.greaterThanEqual(ctx, value+1)
 }
 
 // func (rr *RowReaderRoaringSet) equal(ctx context.Context) error {
@@ -296,4 +373,8 @@ func (c *noGapsCursor) next() (uint8, *sroar.Bitmap, bool) {
 		return key, c.lastVal, true
 	}
 	return key, nil, true
+}
+
+func (c *noGapsCursor) close() {
+	c.cursor.Close()
 }
