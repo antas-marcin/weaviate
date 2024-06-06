@@ -9,7 +9,7 @@
 //  CONTACT: hello@weaviate.io
 //
 
-package inverted
+package lsmkv
 
 import (
 	"context"
@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/weaviate/sroar"
-	"github.com/weaviate/weaviate/adapters/repos/db/lsmkv"
 	"github.com/weaviate/weaviate/entities/filters"
 )
 
@@ -36,7 +35,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 	}
 
 	t.Run("with empty CursorRoaringSetRange", func(t *testing.T) {
-		cursorFnEmpty := func() lsmkv.CursorRoaringSetRange {
+		cursorFnEmpty := func() CursorRoaringSetRange {
 			return newFakeCursorRoaringSetRange(map[uint64]uint64{})
 		}
 
@@ -58,7 +57,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 		}
 	})
 	t.Run("with populated CursorRoaringSetRange", func(t *testing.T) {
-		cursorFnPopulated := func() lsmkv.CursorRoaringSetRange {
+		cursorFnPopulated := func() CursorRoaringSetRange {
 			return newFakeCursorRoaringSetRange(map[uint64]uint64{
 				113: 13, // 1101
 				213: 13, // 1101
@@ -399,7 +398,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 	})
 
 	t.Run("with populated CursorRoaringSetRange (high numbers)", func(t *testing.T) {
-		cursorFnPopulated := func() lsmkv.CursorRoaringSetRange {
+		cursorFnPopulated := func() CursorRoaringSetRange {
 			return newFakeCursorRoaringSetRange(map[uint64]uint64{
 				113: math.MaxUint64 - 13, // 1111..0010
 				213: math.MaxUint64 - 13, // 1111..0010

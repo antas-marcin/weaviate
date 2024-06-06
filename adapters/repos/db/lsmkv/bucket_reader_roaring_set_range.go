@@ -9,7 +9,7 @@
 //  CONTACT: hello@weaviate.io
 //
 
-package inverted
+package lsmkv
 
 import (
 	"context"
@@ -17,18 +17,17 @@ import (
 	"math"
 
 	"github.com/weaviate/sroar"
-	"github.com/weaviate/weaviate/adapters/repos/db/lsmkv"
 	"github.com/weaviate/weaviate/entities/filters"
 )
 
 type ReaderRoaringSetRange struct {
 	value    uint64
 	operator filters.Operator
-	cursorFn func() lsmkv.CursorRoaringSetRange
+	cursorFn func() CursorRoaringSetRange
 }
 
 func NewReaderRoaringSetRange(value uint64, operator filters.Operator,
-	cursorFn func() lsmkv.CursorRoaringSetRange,
+	cursorFn func() CursorRoaringSetRange,
 ) *ReaderRoaringSetRange {
 	return &ReaderRoaringSetRange{
 		value:    value,
@@ -57,7 +56,7 @@ func (r *ReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error)
 		return r.lessThanEqual(ctx)
 
 	default:
-		return nil, fmt.Errorf("operator %v not supported for strategy %q", r.operator.Name(), lsmkv.StrategyRoaringSetRange)
+		return nil, fmt.Errorf("operator %v not supported for strategy %q", r.operator.Name(), StrategyRoaringSetRange)
 	}
 }
 
@@ -233,7 +232,7 @@ func (r *ReaderRoaringSetRange) mergeEqual(ctx context.Context, resBM *sroar.Bit
 }
 
 type noGapsCursor struct {
-	cursor  lsmkv.CursorRoaringSetRange
+	cursor  CursorRoaringSetRange
 	key     uint8
 	started bool
 
