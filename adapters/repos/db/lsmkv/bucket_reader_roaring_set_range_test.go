@@ -45,7 +45,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 			t.Run(operator.Name(), func(t *testing.T) {
 				for _, value := range values {
 					t.Run(fmt.Sprintf("value %d", value), func(t *testing.T) {
-						reader := NewReaderRoaringSetRange(value, operator, cursorFnEmpty)
+						reader := NewBucketReaderRoaringSetRange(value, operator, cursorFnEmpty)
 						bm, err := reader.Read(context.Background())
 
 						assert.NoError(t, err)
@@ -386,7 +386,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.operator.Name(), func(t *testing.T) {
 				t.Run(fmt.Sprintf("value %d", tc.value), func(t *testing.T) {
-					reader := NewReaderRoaringSetRange(tc.value, tc.operator, cursorFnPopulated)
+					reader := NewBucketReaderRoaringSetRange(tc.value, tc.operator, cursorFnPopulated)
 					bm, err := reader.Read(context.Background())
 
 					assert.NoError(t, err)
@@ -727,7 +727,7 @@ func TestReaderRoaringSetRange(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.operator.Name(), func(t *testing.T) {
 				t.Run(fmt.Sprintf("value %d", tc.value), func(t *testing.T) {
-					reader := NewReaderRoaringSetRange(tc.value, tc.operator, cursorFnPopulated)
+					reader := NewBucketReaderRoaringSetRange(tc.value, tc.operator, cursorFnPopulated)
 					bm, err := reader.Read(context.Background())
 
 					assert.NoError(t, err)

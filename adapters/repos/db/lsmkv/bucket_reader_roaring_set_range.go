@@ -20,23 +20,23 @@ import (
 	"github.com/weaviate/weaviate/entities/filters"
 )
 
-type ReaderRoaringSetRange struct {
+type BucketReaderRoaringSetRange struct {
 	value    uint64
 	operator filters.Operator
 	cursorFn func() CursorRoaringSetRange
 }
 
-func NewReaderRoaringSetRange(value uint64, operator filters.Operator,
+func NewBucketReaderRoaringSetRange(value uint64, operator filters.Operator,
 	cursorFn func() CursorRoaringSetRange,
-) *ReaderRoaringSetRange {
-	return &ReaderRoaringSetRange{
+) *BucketReaderRoaringSetRange {
+	return &BucketReaderRoaringSetRange{
 		value:    value,
 		operator: operator,
 		cursorFn: cursorFn,
 	}
 }
 
-func (r *ReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error) {
+func (r *BucketReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -60,7 +60,7 @@ func (r *ReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error)
 	}
 }
 
-func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
+func (r *BucketReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
 	resultBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
 	if !ok {
 		return resultBM, err
@@ -74,7 +74,7 @@ func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bi
 	return r.mergeGreaterThanEqual(ctx, resultBM, cursor, r.value)
 }
 
-func (r *ReaderRoaringSetRange) greaterThan(ctx context.Context) (*sroar.Bitmap, error) {
+func (r *BucketReaderRoaringSetRange) greaterThan(ctx context.Context) (*sroar.Bitmap, error) {
 	// no value is > max uint64
 	if r.value == math.MaxUint64 {
 		return sroar.NewBitmap(), nil
@@ -88,7 +88,7 @@ func (r *ReaderRoaringSetRange) greaterThan(ctx context.Context) (*sroar.Bitmap,
 	return r.mergeGreaterThanEqual(ctx, resultBM, cursor, r.value+1)
 }
 
-func (r *ReaderRoaringSetRange) lessThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
+func (r *BucketReaderRoaringSetRange) lessThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
 	resultBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
 	if !ok {
 		return resultBM, err
@@ -107,7 +107,7 @@ func (r *ReaderRoaringSetRange) lessThanEqual(ctx context.Context) (*sroar.Bitma
 	return resultBM, nil
 }
 
-func (r *ReaderRoaringSetRange) lessThan(ctx context.Context) (*sroar.Bitmap, error) {
+func (r *BucketReaderRoaringSetRange) lessThan(ctx context.Context) (*sroar.Bitmap, error) {
 	// no value is < 0
 	if r.value == 0 {
 		return sroar.NewBitmap(), nil
@@ -126,7 +126,7 @@ func (r *ReaderRoaringSetRange) lessThan(ctx context.Context) (*sroar.Bitmap, er
 	return resultBM, nil
 }
 
-func (r *ReaderRoaringSetRange) equal(ctx context.Context) (*sroar.Bitmap, error) {
+func (r *BucketReaderRoaringSetRange) equal(ctx context.Context) (*sroar.Bitmap, error) {
 	if r.value == 0 {
 		return r.lessThanEqual(ctx)
 	}
@@ -142,7 +142,7 @@ func (r *ReaderRoaringSetRange) equal(ctx context.Context) (*sroar.Bitmap, error
 	return r.mergeEqual(ctx, resultBM, cursor, r.value)
 }
 
-func (r *ReaderRoaringSetRange) notEqual(ctx context.Context) (*sroar.Bitmap, error) {
+func (r *BucketReaderRoaringSetRange) notEqual(ctx context.Context) (*sroar.Bitmap, error) {
 	if r.value == 0 {
 		return r.greaterThan(ctx)
 	}
@@ -163,7 +163,7 @@ func (r *ReaderRoaringSetRange) notEqual(ctx context.Context) (*sroar.Bitmap, er
 	return resultBM, nil
 }
 
-func (r *ReaderRoaringSetRange) nonNullBMWithCursor(ctx context.Context) (*sroar.Bitmap, *noGapsCursor, bool, error) {
+func (r *BucketReaderRoaringSetRange) nonNullBMWithCursor(ctx context.Context) (*sroar.Bitmap, *noGapsCursor, bool, error) {
 	cursor := &noGapsCursor{cursor: r.cursorFn()}
 	_, nonNullBM, _ := cursor.first()
 
@@ -181,7 +181,7 @@ func (r *ReaderRoaringSetRange) nonNullBMWithCursor(ctx context.Context) (*sroar
 	return nonNullBM.Clone(), cursor, true, nil
 }
 
-func (r *ReaderRoaringSetRange) mergeGreaterThanEqual(ctx context.Context, resBM *sroar.Bitmap,
+func (r *BucketReaderRoaringSetRange) mergeGreaterThanEqual(ctx context.Context, resBM *sroar.Bitmap,
 	cursor *noGapsCursor, value uint64,
 ) (*sroar.Bitmap, error) {
 	defer cursor.close()
@@ -202,7 +202,7 @@ func (r *ReaderRoaringSetRange) mergeGreaterThanEqual(ctx context.Context, resBM
 	return resBM, nil
 }
 
-func (r *ReaderRoaringSetRange) mergeEqual(ctx context.Context, resBM *sroar.Bitmap,
+func (r *BucketReaderRoaringSetRange) mergeEqual(ctx context.Context, resBM *sroar.Bitmap,
 	cursor *noGapsCursor, value uint64,
 ) (*sroar.Bitmap, error) {
 	defer cursor.close()
