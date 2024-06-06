@@ -37,9 +37,6 @@ func NewReaderRoaringSetRange(value uint64, operator filters.Operator,
 	}
 }
 
-// Read a row using the specified ReadFn. If RowReader was created with
-// keysOnly==true, the values argument in the readFn will always be nil on all
-// requests involving cursors
 func (r *ReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -63,44 +60,6 @@ func (r *ReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error)
 		return nil, fmt.Errorf("operator %v not supported for strategy %q", r.operator.Name(), lsmkv.StrategyRoaringSetRange)
 	}
 }
-
-// func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
-// 	c := r.cursorFn()
-// 	cursor := &noGapsCursor{cursor: c}
-// 	defer c.Close()
-
-// 	return r.gte(ctx, cursor, r.value)
-// }
-
-// func (r *ReaderRoaringSetRange) greaterThan(ctx context.Context) (*sroar.Bitmap, error) {
-// 	// there is no value greater than max uint64
-// 	if r.value == math.MaxUint64 {
-// 		return sroar.NewBitmap(), nil
-// 	}
-
-// 	c := r.cursorFn()
-// 	cursor := &noGapsCursor{cursor: c}
-// 	defer c.Close()
-
-// 	return r.gte(ctx, cursor, r.value+1)
-// }
-
-// func (r *ReaderRoaringSetRange) lessThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
-// 	c := r.cursorFn()
-// 	cursor := &noGapsCursor{cursor: c}
-// 	defer c.Close()
-
-// 	_, nonNullBM, _ := cursor.first()
-
-// 	if ctx.Err() != nil {
-// 		return nil, ctx.Err()
-// 	}
-
-// }
-
-// func (r *ReaderRoaringSetRange) getNonNullBMAndCursor(ctx context.Context) (*sroar.Bitmap, *noGapsCursor, error) {
-
-// }
 
 func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
 	resBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
@@ -250,14 +209,14 @@ func (r *ReaderRoaringSetRange) mergeEqual(ctx context.Context, resBM *sroar.Bit
 	defer cursor.close()
 
 	resBM1 := resBM.Clone()
-	value1 := r.value + 1
+	value1 := value + 1
 	for bit, bitBM, ok := cursor.next(); ok; bit, bitBM, ok = cursor.next() {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 
 		var b uint64 = 1 << (bit - 1)
-		if r.value&b != 0 {
+		if value&b != 0 {
 			resBM.And(bitBM)
 		} else {
 			resBM.Or(bitBM)
@@ -272,149 +231,6 @@ func (r *ReaderRoaringSetRange) mergeEqual(ctx context.Context, resBM *sroar.Bit
 	resBM.AndNot(resBM1)
 	return resBM, nil
 }
-
-// func (rr *RowReaderRoaringSet) equal(ctx context.Context) error {
-// 	v, err := rr.equalHelper(ctx)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	_, err = readFn(rr.value, v)
-// 	return err
-// }
-
-// func (rr *RowReaderRoaringSet) notEqual(ctx context.Context,
-// 	readFn ReadFn,
-// ) error {
-// 	v, err := rr.equalHelper(ctx)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	inverted := rr.bitmapFactory.GetBitmap()
-// 	inverted.AndNot(v)
-// 	_, err = readFn(rr.value, inverted)
-// 	return err
-// }
-
-// // greaterThan reads from the specified value to the end. The first row is only
-// // included if allowEqual==true, otherwise it starts with the next one
-// func (rr *RowReaderRoaringSet) greaterThan(ctx context.Context,
-// 	readFn ReadFn, allowEqual bool,
-// ) error {
-// 	c := rr.newCursor()
-// 	defer c.Close()
-
-// 	for k, v := c.Seek(rr.value); k != nil; k, v = c.Next() {
-// 		if err := ctx.Err(); err != nil {
-// 			return err
-// 		}
-
-// 		if bytes.Equal(k, rr.value) && !allowEqual {
-// 			continue
-// 		}
-
-// 		if continueReading, err := readFn(k, v); err != nil {
-// 			return err
-// 		} else if !continueReading {
-// 			break
-// 		}
-// 	}
-
-// 	return nil
-// }
-
-// // lessThan reads from the very begging to the specified  value. The last
-// // matching row is only included if allowEqual==true, otherwise it ends one
-// // prior to that.
-// func (rr *RowReaderRoaringSet) lessThan(ctx context.Context,
-// 	readFn ReadFn, allowEqual bool,
-// ) error {
-// 	c := rr.newCursor()
-// 	defer c.Close()
-
-// 	for k, v := c.First(); k != nil && bytes.Compare(k, rr.value) < 1; k, v = c.Next() {
-// 		if err := ctx.Err(); err != nil {
-// 			return err
-// 		}
-
-// 		if bytes.Equal(k, rr.value) && !allowEqual {
-// 			continue
-// 		}
-
-// 		if continueReading, err := readFn(k, v); err != nil {
-// 			return err
-// 		} else if !continueReading {
-// 			break
-// 		}
-// 	}
-
-// 	return nil
-// }
-
-// func (rr *RowReaderRoaringSet) like(ctx context.Context,
-// 	readFn ReadFn,
-// ) error {
-// 	like, err := parseLikeRegexp(rr.value)
-// 	if err != nil {
-// 		return fmt.Errorf("parse like value: %w", err)
-// 	}
-
-// 	c := rr.newCursor()
-// 	defer c.Close()
-
-// 	var (
-// 		initialK   []byte
-// 		initialV   *sroar.Bitmap
-// 		likeMinLen int
-// 	)
-
-// 	if like.optimizable {
-// 		initialK, initialV = c.Seek(like.min)
-// 		likeMinLen = len(like.min)
-// 	} else {
-// 		initialK, initialV = c.First()
-// 	}
-
-// 	for k, v := initialK, initialV; k != nil; k, v = c.Next() {
-// 		if err := ctx.Err(); err != nil {
-// 			return err
-// 		}
-
-// 		if like.optimizable {
-// 			// if the query is optimizable, i.e. it doesn't start with a wildcard, we
-// 			// can abort once we've moved past the point where the fixed characters
-// 			// no longer match
-// 			if len(k) < likeMinLen {
-// 				break
-// 			}
-// 			if bytes.Compare(like.min, k[:likeMinLen]) == -1 {
-// 				break
-// 			}
-// 		}
-
-// 		if !like.regexp.Match(k) {
-// 			continue
-// 		}
-
-// 		if continueReading, err := readFn(k, v); err != nil {
-// 			return err
-// 		} else if !continueReading {
-// 			break
-// 		}
-// 	}
-
-// 	return nil
-// }
-
-// // equalHelper exists, because the Equal and NotEqual operators share this functionality
-// func (rr *RowReaderRoaringSet) equalHelper(ctx context.Context) (*sroar.Bitmap, error) {
-// 	if err := ctx.Err(); err != nil {
-// 		return nil, err
-// 	}
-
-// 	return rr.getter(rr.value)
-// }
 
 type noGapsCursor struct {
 	cursor  lsmkv.CursorRoaringSetRange
