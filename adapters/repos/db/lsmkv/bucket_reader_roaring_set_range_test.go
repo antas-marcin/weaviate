@@ -25,28 +25,26 @@ import (
 )
 
 func TestReaderRoaringSetRange(t *testing.T) {
-	operators := []filters.Operator{
-		filters.OperatorGreaterThanEqual,
-		filters.OperatorGreaterThan,
-		filters.OperatorLessThanEqual,
-		filters.OperatorLessThan,
-		filters.OperatorEqual,
-		filters.OperatorNotEqual,
-	}
-
 	t.Run("with empty CursorRoaringSetRange", func(t *testing.T) {
-		cursorFnEmpty := func() CursorRoaringSetRange {
-			return newFakeCursorRoaringSetRange(map[uint64]uint64{})
+		values := []uint64{0, 1, 4, 5, 6, 12, 13, 14, 12345678901234567890, math.MaxUint64}
+		operators := []filters.Operator{
+			filters.OperatorGreaterThanEqual,
+			filters.OperatorGreaterThan,
+			filters.OperatorLessThanEqual,
+			filters.OperatorLessThan,
+			filters.OperatorEqual,
+			filters.OperatorNotEqual,
 		}
 
-		values := []uint64{0, 1, 4, 5, 6, 12, 13, 14, 12345678901234567890, math.MaxUint64}
+		reader := NewBucketReaderRoaringSetRange(func() CursorRoaringSetRange {
+			return newFakeCursorRoaringSetRange(map[uint64]uint64{})
+		})
 
 		for _, operator := range operators {
 			t.Run(operator.Name(), func(t *testing.T) {
 				for _, value := range values {
 					t.Run(fmt.Sprintf("value %d", value), func(t *testing.T) {
-						reader := NewBucketReaderRoaringSetRange(value, operator, cursorFnEmpty)
-						bm, err := reader.Read(context.Background())
+						bm, err := reader.Read(context.Background(), value, operator)
 
 						assert.NoError(t, err)
 						require.NotNil(t, bm)
@@ -57,17 +55,6 @@ func TestReaderRoaringSetRange(t *testing.T) {
 		}
 	})
 	t.Run("with populated CursorRoaringSetRange", func(t *testing.T) {
-		cursorFnPopulated := func() CursorRoaringSetRange {
-			return newFakeCursorRoaringSetRange(map[uint64]uint64{
-				113: 13, // 1101
-				213: 13, // 1101
-				15:  5,  // 0101
-				25:  5,  // 0101
-				10:  0,  // 0000
-				20:  0,  // 0000
-			})
-		}
-
 		type testCase struct {
 			operator filters.Operator
 			value    uint64
@@ -383,11 +370,21 @@ func TestReaderRoaringSetRange(t *testing.T) {
 			},
 		}
 
+		reader := NewBucketReaderRoaringSetRange(func() CursorRoaringSetRange {
+			return newFakeCursorRoaringSetRange(map[uint64]uint64{
+				113: 13, // 1101
+				213: 13, // 1101
+				15:  5,  // 0101
+				25:  5,  // 0101
+				10:  0,  // 0000
+				20:  0,  // 0000
+			})
+		})
+
 		for _, tc := range testCases {
 			t.Run(tc.operator.Name(), func(t *testing.T) {
 				t.Run(fmt.Sprintf("value %d", tc.value), func(t *testing.T) {
-					reader := NewBucketReaderRoaringSetRange(tc.value, tc.operator, cursorFnPopulated)
-					bm, err := reader.Read(context.Background())
+					bm, err := reader.Read(context.Background(), tc.value, tc.operator)
 
 					assert.NoError(t, err)
 					require.NotNil(t, bm)
@@ -398,17 +395,6 @@ func TestReaderRoaringSetRange(t *testing.T) {
 	})
 
 	t.Run("with populated CursorRoaringSetRange (high numbers)", func(t *testing.T) {
-		cursorFnPopulated := func() CursorRoaringSetRange {
-			return newFakeCursorRoaringSetRange(map[uint64]uint64{
-				113: math.MaxUint64 - 13, // 1111..0010
-				213: math.MaxUint64 - 13, // 1111..0010
-				15:  math.MaxUint64 - 5,  // 1111..1010
-				25:  math.MaxUint64 - 5,  // 1111..1010
-				10:  math.MaxUint64,      // 1111..1111
-				20:  math.MaxUint64,      // 1111..1111
-			})
-		}
-
 		type testCase struct {
 			operator filters.Operator
 			value    uint64
@@ -724,11 +710,21 @@ func TestReaderRoaringSetRange(t *testing.T) {
 			},
 		}
 
+		reader := NewBucketReaderRoaringSetRange(func() CursorRoaringSetRange {
+			return newFakeCursorRoaringSetRange(map[uint64]uint64{
+				113: math.MaxUint64 - 13, // 1111..0010
+				213: math.MaxUint64 - 13, // 1111..0010
+				15:  math.MaxUint64 - 5,  // 1111..1010
+				25:  math.MaxUint64 - 5,  // 1111..1010
+				10:  math.MaxUint64,      // 1111..1111
+				20:  math.MaxUint64,      // 1111..1111
+			})
+		})
+
 		for _, tc := range testCases {
 			t.Run(tc.operator.Name(), func(t *testing.T) {
 				t.Run(fmt.Sprintf("value %d", tc.value), func(t *testing.T) {
-					reader := NewBucketReaderRoaringSetRange(tc.value, tc.operator, cursorFnPopulated)
-					bm, err := reader.Read(context.Background())
+					bm, err := reader.Read(context.Background(), tc.value, tc.operator)
 
 					assert.NoError(t, err)
 					require.NotNil(t, bm)
