@@ -62,17 +62,17 @@ func (r *ReaderRoaringSetRange) Read(ctx context.Context) (*sroar.Bitmap, error)
 }
 
 func (r *ReaderRoaringSetRange) greaterThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
-	resBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
+	resultBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
 	if !ok {
-		return resBM, err
+		return resultBM, err
 	}
 
 	// all values are >= 0
 	if r.value == 0 {
-		return resBM, nil
+		return resultBM, nil
 	}
 
-	return r.mergeGreaterThanEqual(ctx, resBM, cursor, r.value)
+	return r.mergeGreaterThanEqual(ctx, resultBM, cursor, r.value)
 }
 
 func (r *ReaderRoaringSetRange) greaterThan(ctx context.Context) (*sroar.Bitmap, error) {
@@ -81,31 +81,31 @@ func (r *ReaderRoaringSetRange) greaterThan(ctx context.Context) (*sroar.Bitmap,
 		return sroar.NewBitmap(), nil
 	}
 
-	resBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
+	resultBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
 	if !ok {
-		return resBM, err
+		return resultBM, err
 	}
 
-	return r.mergeGreaterThanEqual(ctx, resBM, cursor, r.value+1)
+	return r.mergeGreaterThanEqual(ctx, resultBM, cursor, r.value+1)
 }
 
 func (r *ReaderRoaringSetRange) lessThanEqual(ctx context.Context) (*sroar.Bitmap, error) {
-	resBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
+	resultBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
 	if !ok {
-		return resBM, err
+		return resultBM, err
 	}
 
 	// all values are <= max uint64
 	if r.value == math.MaxUint64 {
-		return resBM, nil
+		return resultBM, nil
 	}
 
-	partialBM, err := r.mergeGreaterThanEqual(ctx, resBM.Clone(), cursor, r.value+1)
+	greaterThanEqualBM, err := r.mergeGreaterThanEqual(ctx, resultBM.Clone(), cursor, r.value+1)
 	if err != nil {
 		return nil, err
 	}
-	resBM.AndNot(partialBM)
-	return resBM, nil
+	resultBM.AndNot(greaterThanEqualBM)
+	return resultBM, nil
 }
 
 func (r *ReaderRoaringSetRange) lessThan(ctx context.Context) (*sroar.Bitmap, error) {
@@ -114,17 +114,17 @@ func (r *ReaderRoaringSetRange) lessThan(ctx context.Context) (*sroar.Bitmap, er
 		return sroar.NewBitmap(), nil
 	}
 
-	resBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
+	resultBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
 	if !ok {
-		return resBM, err
+		return resultBM, err
 	}
 
-	greaterThanEqualBM, err := r.mergeGreaterThanEqual(ctx, resBM.Clone(), cursor, r.value)
+	greaterThanEqualBM, err := r.mergeGreaterThanEqual(ctx, resultBM.Clone(), cursor, r.value)
 	if err != nil {
 		return nil, err
 	}
-	resBM.AndNot(greaterThanEqualBM)
-	return resBM, nil
+	resultBM.AndNot(greaterThanEqualBM)
+	return resultBM, nil
 }
 
 func (r *ReaderRoaringSetRange) equal(ctx context.Context) (*sroar.Bitmap, error) {
@@ -135,12 +135,12 @@ func (r *ReaderRoaringSetRange) equal(ctx context.Context) (*sroar.Bitmap, error
 		return r.greaterThanEqual(ctx)
 	}
 
-	resBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
+	resultBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
 	if !ok {
-		return resBM, err
+		return resultBM, err
 	}
 
-	return r.mergeEqual(ctx, resBM, cursor, r.value)
+	return r.mergeEqual(ctx, resultBM, cursor, r.value)
 }
 
 func (r *ReaderRoaringSetRange) notEqual(ctx context.Context) (*sroar.Bitmap, error) {
@@ -151,24 +151,24 @@ func (r *ReaderRoaringSetRange) notEqual(ctx context.Context) (*sroar.Bitmap, er
 		return r.lessThan(ctx)
 	}
 
-	resBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
+	resultBM, cursor, ok, err := r.nonNullBMWithCursor(ctx)
 	if !ok {
-		return resBM, err
+		return resultBM, err
 	}
 
-	equalBM, err := r.mergeEqual(ctx, resBM.Clone(), cursor, r.value)
+	equalBM, err := r.mergeEqual(ctx, resultBM.Clone(), cursor, r.value)
 	if err != nil {
 		return nil, err
 	}
-	resBM.AndNot(equalBM)
-	return resBM, nil
+	resultBM.AndNot(equalBM)
+	return resultBM, nil
 }
 
 func (r *ReaderRoaringSetRange) nonNullBMWithCursor(ctx context.Context) (*sroar.Bitmap, *noGapsCursor, bool, error) {
 	cursor := &noGapsCursor{cursor: r.cursorFn()}
 	_, nonNullBM, _ := cursor.first()
 
-	// if non-null bm is nil or empty, no values are stored
+	// if non-null bm is nil or empty, no values are present
 	if nonNullBM == nil || nonNullBM.IsEmpty() {
 		cursor.close()
 		return sroar.NewBitmap(), nil, false, nil
