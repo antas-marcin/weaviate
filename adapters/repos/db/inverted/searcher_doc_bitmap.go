@@ -95,7 +95,7 @@ func (s *Searcher) docBitmapInvertedRoaringSetRange(ctx context.Context, b *lsmk
 	}
 
 	value := binary.LittleEndian.Uint64(pv.value)
-	reader := lsmkv.NewReaderRoaringSetRange(value, pv.operator, b.CursorRoaringSetRange)
+	reader := lsmkv.NewBucketReaderRoaringSetRange(value, pv.operator, b.CursorRoaringSetRange)
 	docIds, err := reader.Read(ctx)
 	if err != nil {
 		return newDocBitmap(), fmt.Errorf("readerRoaringSetRange: %w", err)
