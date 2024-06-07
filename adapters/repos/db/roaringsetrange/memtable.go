@@ -39,17 +39,15 @@ func (m *Memtable) Insert(key uint64, values []uint64) {
 		m.nnDeletions.Set(v)
 	}
 
-	for bit := 0; bit < 64; bit++ {
-		exists := m.bitsAdditions[bit] != nil
-
+	for bit := range m.bitsAdditions {
 		if key&(1<<bit) == 0 {
-			if exists {
+			if m.bitsAdditions[bit] != nil {
 				for _, v := range values {
 					m.bitsAdditions[bit].Remove(v)
 				}
 			}
 		} else {
-			if !exists {
+			if m.bitsAdditions[bit] == nil {
 				m.bitsAdditions[bit] = sroar.NewBitmap()
 			}
 			for _, v := range values {
@@ -57,38 +55,6 @@ func (m *Memtable) Insert(key uint64, values []uint64) {
 			}
 		}
 	}
-
-	// bmValues := roaringset.NewBitmap(values...)
-	// m.nnDeletions.Or(bmValues)
-	// m.nnAdditions.Or(bmValues)
-	// _ = bmValues
-	// eg := new(errgroup.Group)
-	// for i := 0; i < 8; i++ {
-	// 	// i := i
-	// 	// eg.Go(func() error {
-	// 	for j := 0; j < 64; j += 8 {
-	// 		bit := j + i
-	// 		exists := m.bitsAdditions[bit] != nil
-
-	// 		if key&(1<<bit) == 0 {
-	// 			if exists {
-	// 				for _, v := range values {
-	// 					m.bitsAdditions[bit].Remove(v)
-	// 				}
-	// 			}
-	// 		} else {
-	// 			if !exists {
-	// 				m.bitsAdditions[bit] = sroar.NewBitmap()
-	// 			}
-	// 			for _, v := range values {
-	// 				m.bitsAdditions[bit].Set(v)
-	// 			}
-	// 		}
-	// 	}
-	// 	// 	return nil
-	// 	// })
-	// }
-	// // eg.Wait()
 }
 
 func (m *Memtable) Delete(key uint64, values []uint64) {
@@ -101,31 +67,7 @@ func (m *Memtable) Delete(key uint64, values []uint64) {
 		m.nnAdditions.Remove(v)
 	}
 
-	// bmValues := roaringset.NewBitmap(values...)
-	// m.nnDeletions.Or(bmValues)
-
-	// bmValues.And(m.nnAdditions)
-	// if bmValues.IsEmpty() {
-	// 	return
-	// }
-
-	// m.nnAdditions.AndNot(bmValues)
-
-	// eg := new(errgroup.Group)
-	// for bit := 0; bit < 8; bit++ {
-	// 	bit := bit
-	// 	eg.Go(func() error {
-	// 		for j := 0; j < 8; j++ {
-	// 			bit := j*8 + bit
-	// 			if m.bitsAdditions[bit] != nil {
-	// 				m.bitsAdditions[bit].AndNot(bmValues)
-	// 			}
-	// 		}
-	// 		return nil
-	// 	})
-	// }
-	// eg.Wait()
-	for bit := 0; bit < 64; bit++ {
+	for bit := range m.bitsAdditions {
 		if m.bitsAdditions[bit] != nil {
 			for _, v := range values {
 				m.bitsAdditions[bit].Remove(v)
@@ -148,19 +90,17 @@ func (m *Memtable) Nodes() []*MemtableNode {
 
 	bmEmpty := sroar.NewBitmap()
 
-	l := 1
-	for i := uint8(0); i < 64; i++ {
-		if m.bitsAdditions[i] != nil && !m.bitsAdditions[i].IsEmpty() {
-			l++
+	for bit := range m.bitsAdditions {
+		if m.bitsAdditions[bit] != nil && !m.bitsAdditions[bit].IsEmpty() {
 			nodes = append(nodes, &MemtableNode{
-				Key:       i + 1,
-				Additions: roaringset.Condense(m.bitsAdditions[i]),
+				Key:       uint8(bit) + 1,
+				Additions: roaringset.Condense(m.bitsAdditions[bit]),
 				Deletions: bmEmpty,
 			})
 		}
 	}
 
-	return nodes[:l]
+	return nodes
 }
 
 type MemtableNode struct {
