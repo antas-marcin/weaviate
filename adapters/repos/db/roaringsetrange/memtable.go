@@ -35,26 +35,22 @@ func (m *Memtable) Insert(key uint64, values []uint64) {
 		return
 	}
 
-	for _, v := range values {
-		m.nnAdditions.Set(v)
-		m.nnDeletions.Set(v)
-	}
+	bmValues := roaringset.NewBitmap(values...)
+	m.nnDeletions.Or(bmValues)
+	m.nnAdditions.Or(bmValues)
 
-	for bit := uint8(0); bit < 64; bit++ {
-		_, ok := m.bitsAdditions[bit]
+	for i := uint8(0); i < 64; i++ {
+		bitAdditions, ok := m.bitsAdditions[i]
 
-		if key&(1<<bit) == 0 {
+		if key&(1<<i) == 0 {
 			if ok {
-				for _, v := range values {
-					m.bitsAdditions[bit].Remove(v)
-				}
+				bitAdditions.AndNot(bmValues)
 			}
 		} else {
-			if !ok {
-				m.bitsAdditions[bit] = sroar.NewBitmap()
-			}
-			for _, v := range values {
-				m.bitsAdditions[bit].Set(v)
+			if ok {
+				bitAdditions.Or(bmValues)
+			} else {
+				m.bitsAdditions[i] = bmValues.Clone()
 			}
 		}
 	}
@@ -65,14 +61,17 @@ func (m *Memtable) Delete(key uint64, values []uint64) {
 		return
 	}
 
-	for _, v := range values {
-		m.nnAdditions.Remove(v)
-		m.nnDeletions.Set(v)
+	bmValues := roaringset.NewBitmap(values...)
+	m.nnDeletions.Or(bmValues)
+
+	bmValues.And(m.nnAdditions)
+	if bmValues.IsEmpty() {
+		return
 	}
-	for bit := range m.bitsAdditions {
-		for _, v := range values {
-			m.bitsAdditions[bit].Remove(v)
-		}
+
+	m.nnAdditions.AndNot(bmValues)
+	for _, bitAdditions := range m.bitsAdditions {
+		bitAdditions.AndNot(bmValues)
 	}
 }
 
